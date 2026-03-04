@@ -3,13 +3,15 @@ from PySide6.QtGui import QColor, QFont, QPainter, QBrush, QPen
 from PySide6.QtCore import Qt, Signal, QRect
 
 class CartCell(QWidget):
-    clicked = Signal(object) # Emit the AudioItem
+    clicked = Signal(object, bool) # Emit the AudioItem and a boolean for multi_select modifier
     double_clicked = Signal(object)
+    file_dropped = Signal(object, str) # Emit (item, filepath)
     
     def __init__(self, item, parent=None):
         super().__init__(parent)
         self.item = item
         self.setMinimumSize(100, 100)
+        self.setAcceptDrops(True)
         
         # Setup layout
         layout = QVBoxLayout(self)
@@ -43,11 +45,24 @@ class CartCell(QWidget):
         
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.item)
+            multi_select = bool(event.modifiers() & Qt.ControlModifier) or bool(event.modifiers() & Qt.ShiftModifier)
+            self.clicked.emit(self.item, multi_select)
             
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.double_clicked.emit(self.item)
+            
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if urls and urls[0].isLocalFile():
+            filepath = urls[0].toLocalFile()
+            self.file_dropped.emit(self.item, filepath)
             
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -81,8 +96,9 @@ class CartCell(QWidget):
             painter.drawRect(rect.adjusted(0, 0, -1, -1))
 
 class CartGrid(QWidget):
-    item_selected = Signal(object)
+    item_selected = Signal(list) # Now emits list of selected items
     item_play_requested = Signal(object)
+    file_dropped = Signal(object, str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,14 +126,27 @@ class CartGrid(QWidget):
                 cell = CartCell(item)
                 cell.clicked.connect(self._on_cell_clicked)
                 cell.double_clicked.connect(self._on_cell_double_clicked)
+                cell.file_dropped.connect(self.file_dropped.emit)
                 self.layout.addWidget(cell, r, c)
                 self.cells.append(cell)
                 
-    def _on_cell_clicked(self, item):
+    def _on_cell_clicked(self, item, multi_select):
         # Handle selection logic
-        for cell in self.cells:
-            cell.set_selected(cell.item == item)
-        self.item_selected.emit(item)
+        selected_items = []
+        if multi_select:
+            for cell in self.cells:
+                if cell.item == item:
+                    cell.set_selected(not cell.is_selected) # toggle target
+                if cell.is_selected:
+                    selected_items.append(cell.item)
+        else:
+            for cell in self.cells:
+                is_target = (cell.item == item)
+                cell.set_selected(is_target)
+                if is_target:
+                    selected_items.append(cell.item)
+                    
+        self.item_selected.emit(selected_items)
         
     def _on_cell_double_clicked(self, item):
         self.item_play_requested.emit(item)

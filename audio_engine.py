@@ -137,6 +137,15 @@ class AudioEngine:
         with self.active_lock:
             self.active_tracks.clear()
             
+    def pause_all(self):
+        with self.active_lock:
+            for uid, state in self.active_tracks.items():
+                state['paused'] = not state.get('paused', False)
+                if state['paused']:
+                    state['item_ref'].is_playing = False
+                else:
+                    state['item_ref'].is_playing = True
+            
     def _audio_callback(self, outdata, frames, time_info, status):
         if status:
             print(status)
@@ -147,6 +156,9 @@ class AudioEngine:
             finished = []
             
             for uid, state in self.active_tracks.items():
+                if state.get('paused', False):
+                    continue
+                    
                 data = self.audio_cache.get(uid)
                 if data is None:
                     continue
@@ -179,40 +191,45 @@ class AudioEngine:
                 # Apply fade in
                 fade_in_smp = state['fade_in_samples']
                 if fade_in_smp > 0 and pos < start_idx + fade_in_smp:
-                    # We are in fade in region
                     fi_start = pos - start_idx
                     fi_end = fi_start + chunk_size
-                    # Cap to max fade length
                     if fi_end > fade_in_smp:
                         fi_end = fade_in_smp
                         chunk_size_fi = fi_end - fi_start
                         curve = np.linspace(fi_start/fade_in_smp, fi_end/fade_in_smp, chunk_size_fi, dtype=np.float32)
-                        curve = curve[:, np.newaxis]
-                        chunk[:chunk_size_fi] *= curve
+                        chunk[:chunk_size_fi] *= curve[:, np.newaxis]
                     else:
                         curve = np.linspace(fi_start/fade_in_smp, fi_end/fade_in_smp, chunk_size, dtype=np.float32)
-                        curve = curve[:, np.newaxis]
-                        chunk *= curve
+                        chunk *= curve[:, np.newaxis]
                         
-                # Apply fade out (either manual trigger or end of file)
+                # Apply fade out
                 fade_out_smp = state['fade_out_samples']
                 if state['fade_out_triggered']:
                     fo_frames = min(chunk_size, state['fade_out_pos'])
                     curve = np.linspace(state['fade_out_pos']/fade_out_smp, (state['fade_out_pos']-fo_frames)/fade_out_smp, fo_frames, dtype=np.float32)
-                    curve = curve[:, np.newaxis]
-                    chunk[:fo_frames] *= curve
+                    chunk[:fo_frames] *= curve[:, np.newaxis]
                     state['fade_out_pos'] -= fo_frames
                     if state['fade_out_pos'] <= 0:
                         finished.append(uid)
                 elif fade_out_smp > 0 and pos > end_idx - fade_out_smp:
-                     # End of file fade out
                     fo_start = pos - (end_idx - fade_out_smp)
                     fo_end = fo_start + chunk_size
                     curve = np.linspace(1.0 - fo_start/fade_out_smp, 1.0 - fo_end/fade_out_smp, chunk_size, dtype=np.float32)
-                    # clamp
                     curve = np.clip(curve, 0.0, 1.0)
-                    curve = curve[:, np.newaxis]
-                    chunk *= curve
+                    chunk *= curve[:, np.newaxis]
+
+                # Apply Multipoint Envelope
+                nodes = state['item_ref'].volume_nodes
+                if nodes and len(nodes) >= 2:
+                    try:
+                        sr = self.sr_cache[uid]
+                        t_arr = np.linspace(pos/sr, (pos+chunk_size)/sr, chunk_size, dtype=np.float32)
+                        xp = [n['time'] for n in nodes]
+                        fp = [n['volume'] for n in nodes]
+                        env_curve = np.interp(t_arr, xp, fp)
+                        chunk *= env_curve[:, np.newaxis]
+                    except Exception as e:
+                        pass
 
                 # Add to output mix
                 outdata[:chunk_size] += chunk

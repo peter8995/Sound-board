@@ -23,6 +23,8 @@ class AudioItem:
     fade_out: float = 0.1 # seconds
     start_time: float = 0.0 # seconds
     end_time: float = -1.0 # seconds, -1 means end of file
+    volume_nodes: List[Dict[str, float]] = field(default_factory=list)
+
     
     # Mode settings
     play_mode: str = "Toggle" # "Toggle" or "Hold"
@@ -51,6 +53,7 @@ class AudioItem:
             "fade_out": self.fade_out,
             "start_time": self.start_time,
             "end_time": self.end_time,
+            "volume_nodes": self.volume_nodes,
             "play_mode": self.play_mode,
             "loop_count": self.loop_count,
             "exclusive": self.exclusive,
@@ -73,6 +76,7 @@ class AudioItem:
             fade_out=data.get("fade_out", 0.1),
             start_time=data.get("start_time", 0.0),
             end_time=data.get("end_time", -1.0),
+            volume_nodes=data.get("volume_nodes", []),
             play_mode=data.get("play_mode", "Toggle"),
             loop_count=data.get("loop_count", 1),
             exclusive=data.get("exclusive", False),

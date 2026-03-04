@@ -76,13 +76,12 @@ class WaveformPanel(QWidget):
         self.item = None
         self.progress = 0.0 # 0.0 to 1.0 (relative to total length)
         
-        # Interaction modes: none, fade_in, fade_out, start, end
+        # Interaction modes: none, start, end, node_drag
         self.drag_mode = "none"
+        self.drag_node_idx = -1
         
     def set_audio(self, numpy_data, item, samplerate=44100):
-        # downsample for display if needed
         if numpy_data is not None and len(numpy_data) > 0:
-            # We'll calculate min/max pairs per pixel during paint or cache it
             self.audio_data = numpy_data
         else:
             self.audio_data = None
@@ -121,12 +120,10 @@ class WaveformPanel(QWidget):
         total_seconds = total_samples / self.samplerate
         if total_seconds <= 0: return
 
-        # Draw waveform (simplified downsampling visualizer)
+        # Draw waveform
         samples_per_pixel = total_samples // w
         if samples_per_pixel > 0:
             painter.setPen(QPen(self.wave_color, 1))
-            
-            # Convert to mono for display
             if self.audio_data.ndim > 1:
                 mono = self.audio_data.mean(axis=1)
             else:
@@ -134,9 +131,6 @@ class WaveformPanel(QWidget):
                 
             path = QPainterPath()
             half_h = h / 2
-            
-            # Simple min/max decimation
-            # For massive files this should be cached in set_audio
             step = max(1, samples_per_pixel)
             
             for x in range(w):
@@ -156,14 +150,15 @@ class WaveformPanel(QWidget):
                     else:
                         painter.drawLine(x, y1, x, y2)
                         
-        # Draw Playback line
+        # Draw Playback line (Green)
         pos_x = int(self.progress * w)
         painter.setPen(QPen(self.pos_color, 2))
         painter.drawLine(pos_x, 0, pos_x, h)
         
-        # Draw Start / End crop lines
+        # Draw Start / End crop lines (White dashed)
         start_ratio = self.item.start_time / total_seconds
-        end_ratio = self.item.end_time / total_seconds if self.item.end_time >= 0 else 1.0
+        end_time = self.item.end_time if self.item.end_time >= 0 else total_seconds
+        end_ratio = end_time / total_seconds
         
         start_x = int(start_ratio * w)
         end_x = int(end_ratio * w)
@@ -172,43 +167,94 @@ class WaveformPanel(QWidget):
         painter.drawLine(start_x, 0, start_x, h)
         painter.drawLine(end_x, 0, end_x, h)
         
-        # Draw Fade Curves (Yellow)
+        # Draw multi-point envelope (Yellow curve)
+        nodes = self.item.volume_nodes
+        if not nodes:
+            # Default max volume curve
+            nodes = [{"time": self.item.start_time, "volume": 1.0}, {"time": end_time, "volume": 1.0}]
+            
+        # Optional: ensure nodes are sorted by time
+        nodes = sorted(nodes, key=lambda n: n["time"])
+        
         painter.setPen(QPen(self.fade_color, 2))
-        # Fade in curve
-        fade_in_end_x = int((self.item.start_time + self.item.fade_in) / total_seconds * w)
-        painter.drawLine(start_x, h, fade_in_end_x, 0) # Bottom to Top
+        painter.setBrush(QBrush(self.fade_color))
         
-        # Fade out curve
-        fade_out_start_x = int((self.item.end_time - self.item.fade_out if self.item.end_time > 0 else total_seconds - self.item.fade_out) / total_seconds * w)
-        painter.drawLine(fade_out_start_x, 0, end_x, h) # Top to Bottom
+        prev_x, prev_y = None, None
         
-        
+        for node in nodes:
+            nx = int((node["time"] / total_seconds) * w)
+            ny = int(h - (node["volume"] * h)) # volume 0-1, 1 is top (y=0)
+            
+            if prev_x is not None:
+                painter.drawLine(prev_x, prev_y, nx, ny)
+                
+            # Draw point
+            painter.drawEllipse(nx - 4, ny - 4, 8, 8)
+            
+            prev_x, prev_y = nx, ny
+            
     def mousePressEvent(self, event):
         if self.audio_data is None or self.item is None:
             return
             
         total_seconds = len(self.audio_data) / self.samplerate
         w = self.width()
-        x = event.position().x()
+        h = self.height()
         
-        # Hit detection (rough)
+        ex = event.position().x()
+        ey = event.position().y()
+        time_val = (ex / w) * total_seconds
+        vol_val = 1.0 - (ey / h)
+        
+        # 1. Check start/end points
         start_x = (self.item.start_time / total_seconds) * w
-        end_x = (self.item.end_time / total_seconds if self.item.end_time >= 0 else 1.0) * w
+        end_time = self.item.end_time if self.item.end_time >= 0 else total_seconds
+        end_x = (end_time / total_seconds) * w
         
-        fade_in_x = ((self.item.start_time + self.item.fade_in) / total_seconds) * w
-        fade_out_x = ((self.item.end_time - self.item.fade_out if self.item.end_time > 0 else total_seconds - self.item.fade_out) / total_seconds) * w
-
-        margin = 10
-        if abs(x - start_x) < margin:
+        margin = 8
+        if abs(ex - start_x) < margin:
             self.drag_mode = "start"
-        elif abs(x - end_x) < margin:
+            return
+        elif abs(ex - end_x) < margin:
             self.drag_mode = "end"
-        elif abs(x - fade_in_x) < margin:
-            self.drag_mode = "fade_in"
-        elif abs(x - fade_out_x) < margin:
-            self.drag_mode = "fade_out"
+            return
+            
+        # 2. Check nodes
+        nodes = self.item.volume_nodes
+        if not nodes:
+            # Bootstrap default nodes
+            nodes = [{"time": self.item.start_time, "volume": 1.0}, {"time": end_time, "volume": 1.0}]
+            self.item.volume_nodes = nodes
+        
+        clicked_node_idx = -1
+        for i, node in enumerate(nodes):
+            nx = (node["time"] / total_seconds) * w
+            ny = h - (node["volume"] * h)
+            
+            if abs(ex - nx) < margin and abs(ey - ny) < margin:
+                clicked_node_idx = i
+                break
+                
+        if clicked_node_idx != -1:
+            if event.button() == Qt.RightButton:
+                # Remove node
+                if len(nodes) > 2: # Keep at least 2 nodes
+                    nodes.pop(clicked_node_idx)
+                    self.update()
+            else:
+                self.drag_mode = "node"
+                self.drag_node_idx = clicked_node_idx
         else:
-            self.drag_mode = "none"
+            if event.button() == Qt.LeftButton:
+                # Add new node
+                new_node = {"time": time_val, "volume": max(0.0, min(1.0, vol_val))}
+                nodes.append(new_node)
+                nodes.sort(key=lambda n: n["time"])
+                self.item.volume_nodes = nodes
+                self.drag_mode = "node"
+                # find index
+                self.drag_node_idx = nodes.index(new_node)
+                self.update()
             
     def mouseMoveEvent(self, event):
         if self.audio_data is None or self.item is None or self.drag_mode == "none":
@@ -216,27 +262,31 @@ class WaveformPanel(QWidget):
             
         total_seconds = len(self.audio_data) / self.samplerate
         w = self.width()
-        x = max(0, min(event.position().x(), w))
+        h = self.height()
+        ex = max(0, min(event.position().x(), w))
+        ey = max(0, min(event.position().y(), h))
         
-        time_val = (x / w) * total_seconds
+        time_val = (ex / w) * total_seconds
+        vol_val = 1.0 - (ey / h)
         
         if self.drag_mode == "start":
-            self.item.start_time = max(0.0, min(time_val, self.item.end_time if self.item.end_time > 0 else total_seconds))
-            # clamp fade in
-            max_fade = (self.item.end_time if self.item.end_time > 0 else total_seconds) - self.item.start_time
-            self.item.fade_in = min(self.item.fade_in, max_fade)
+            end_t = self.item.end_time if self.item.end_time > 0 else total_seconds
+            self.item.start_time = max(0.0, min(time_val, end_t))
         elif self.drag_mode == "end":
             self.item.end_time = max(self.item.start_time, min(time_val, total_seconds))
-            # clamp fade out
-            max_fade = self.item.end_time - self.item.start_time
-            self.item.fade_out = min(self.item.fade_out, max_fade)
-        elif self.drag_mode == "fade_in":
-            self.item.fade_in = max(0.0, time_val - self.item.start_time)
-        elif self.drag_mode == "fade_out":
-            end_t = self.item.end_time if self.item.end_time > 0 else total_seconds
-            self.item.fade_out = max(0.0, end_t - time_val)
+        elif self.drag_mode == "node" and self.drag_node_idx != -1:
+            nodes = self.item.volume_nodes
+            # Clamp time to preserve order (roughly)
+            min_t = nodes[self.drag_node_idx - 1]["time"] if self.drag_node_idx > 0 else 0
+            max_t = nodes[self.drag_node_idx + 1]["time"] if self.drag_node_idx < len(nodes) - 1 else total_seconds
+            
+            time_val = max(min_t, min(time_val, max_t))
+            
+            nodes[self.drag_node_idx]["time"] = time_val
+            nodes[self.drag_node_idx]["volume"] = max(0.0, min(1.0, vol_val))
             
         self.update()
         
     def mouseReleaseEvent(self, event):
         self.drag_mode = "none"
+        self.drag_node_idx = -1
