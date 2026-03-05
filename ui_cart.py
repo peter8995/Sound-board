@@ -80,6 +80,10 @@ class CartCell(QWidget):
             
         painter.fillRect(rect, bg_color)
         
+        # Sync text dynamically to catch drops or property edits
+        self.name_label.setText(self.item.name)
+        self.hotkey_label.setText(self.item.hotkey)
+        
         # Draw Progress Bar if playing
         if self.item.is_playing and self.item.end_time > 0:
             duration = self.item.end_time - self.item.start_time

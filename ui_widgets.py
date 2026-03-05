@@ -240,6 +240,7 @@ class WaveformPanel(QWidget):
                 # Remove node
                 if len(nodes) > 2: # Keep at least 2 nodes
                     nodes.pop(clicked_node_idx)
+                    self.item.volume_nodes = nodes
                     self.update()
             else:
                 self.drag_mode = "node"

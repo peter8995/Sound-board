@@ -359,6 +359,7 @@ class MainWindow(QMainWindow):
     def _on_properties_changed(self):
         self.is_dirty = True
         self.cart_view.update_cells()
+        self.playlist_view.update_cells()
         # Note: In a larger app, we might need to tell the audio engine if volume changed mid-playback
         # For now, properties impact next playback or waveform render.
         # We also want to redraw waveform if start/end times changed:

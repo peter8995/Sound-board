@@ -113,6 +113,9 @@ class AudioEngine:
                 'item_ref': item  # Keep ref to update progress
             }
             
+            item.is_playing = True
+            item.progress = 0.0
+            
             if item.exclusive:
                 # Stop all others
                 for u in list(self.active_tracks.keys()):
@@ -182,6 +185,9 @@ class AudioEngine:
                         continue
                         
                 chunk_size = min(frames, frames_left)
+                if chunk_size <= 0:
+                    finished.append(uid)
+                    continue
                 
                 chunk = data[pos:pos+chunk_size].copy()
                 
@@ -250,6 +256,7 @@ class AudioEngine:
                     try:
                         self.active_tracks[f]['item_ref'].is_playing = False
                         self.active_tracks[f]['item_ref'].progress = 0
+                        self.active_tracks[f]['item_ref'].start_time = self.active_tracks[f]['item_ref'].start_time # trigger some ui updates?
                     except:
                         pass
                     del self.active_tracks[f]

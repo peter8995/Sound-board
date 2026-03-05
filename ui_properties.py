@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QDoubleSpinBox, 
                                QSpinBox, QComboBox, QCheckBox, QPushButton, 
                                QColorDialog)
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 
 class PropertiesPanel(QWidget):
     properties_changed = Signal()
