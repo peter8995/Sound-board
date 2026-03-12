@@ -10,7 +10,12 @@ from project import AudioItem
 class PlaylistDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         item_data = index.data(Qt.UserRole)
-        is_selected = option.state & QStyle.State_Selected
+        
+        # Check custom selection
+        list_widget = option.widget
+        is_selected = False
+        if hasattr(list_widget, 'custom_selected_items') and item_data in list_widget.custom_selected_items:
+            is_selected = True
 
         rect = option.rect
         
@@ -76,13 +81,42 @@ class PlaylistDelegate(QStyledItemDelegate):
 
 class CustomListWidget(QListWidget):
     files_dropped = Signal(list)
+    item_play_requested = Signal(object)
+    custom_selection_changed = Signal(list)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
+        self.custom_selected_items = set()
         
+    def mousePressEvent(self, event):
+        item = self.itemAt(event.pos())
+        if not item:
+            super().mousePressEvent(event)
+            return
+            
+        if event.button() == Qt.RightButton:
+            multi_select = bool(event.modifiers() & Qt.ControlModifier) or bool(event.modifiers() & Qt.ShiftModifier)
+            if not multi_select:
+                self.custom_selected_items.clear()
+                
+            item_data = item.data(Qt.UserRole)
+            if item_data in self.custom_selected_items:
+                self.custom_selected_items.remove(item_data)
+            else:
+                self.custom_selected_items.add(item_data)
+                
+            self.viewport().update()
+            self.custom_selection_changed.emit(list(self.custom_selected_items))
+            return
+            
+        elif event.button() == Qt.LeftButton:
+            item_data = item.data(Qt.UserRole)
+            self.item_play_requested.emit(item_data)
+            super().mousePressEvent(event)
+            
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -130,11 +164,10 @@ class PlaylistView(QWidget):
         layout.addLayout(toolbar)
         
         self.list_widget = CustomListWidget()
-        self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_widget.setItemDelegate(PlaylistDelegate())
         
-        self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
-        self.list_widget.itemDoubleClicked.connect(self._on_double_click)
+        self.list_widget.custom_selection_changed.connect(self.item_selected.emit)
+        self.list_widget.item_play_requested.connect(self.item_play_requested.emit)
         self.list_widget.files_dropped.connect(self._on_files_dropped)
         self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
         
@@ -179,28 +212,19 @@ class PlaylistView(QWidget):
         self.list_changed.emit()
         
     def _delete_selected(self):
-        selected_items = self.list_widget.selectedItems()
-        if not selected_items: return
+        if not self.list_widget.custom_selected_items: return
         
-        for sel in selected_items:
-            item_data = sel.data(Qt.UserRole)
-            if item_data in self.project_list:
-                self.project_list.remove(item_data)
+        for sel in list(self.list_widget.custom_selected_items):
+            if sel in self.project_list:
+                self.project_list.remove(sel)
                 
+        self.list_widget.custom_selected_items.clear()
         self._refresh_list()
         self.list_changed.emit()
-        
-    def _on_selection_changed(self):
-        selected_items = [i.data(Qt.UserRole) for i in self.list_widget.selectedItems()]
-        self.item_selected.emit(selected_items)
-        
-    def _on_double_click(self, list_item):
-        item_data = list_item.data(Qt.UserRole)
-        self.item_play_requested.emit(item_data)
+        self.item_selected.emit([])
         
     def _on_rows_moved(self, sourceParent, sourceStart, sourceEnd, destinationParent, destinationRow):
         # Update underlying list logic (Reordering project_list)
-        # Using simple clear and rebuild since Qt internal drag/drop manipulates the view model
         new_list = []
         for i in range(self.list_widget.count()):
             new_list.append(self.list_widget.item(i).data(Qt.UserRole))
@@ -211,9 +235,9 @@ class PlaylistView(QWidget):
         
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Space:
-            selected = self.list_widget.selectedItems()
+            selected = list(self.list_widget.custom_selected_items)
             if selected:
-                item_data = selected[0].data(Qt.UserRole)
+                item_data = selected[0]
                 self.item_play_requested.emit(item_data)
         else:
             super().keyPressEvent(event)

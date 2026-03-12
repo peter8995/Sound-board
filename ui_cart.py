@@ -44,13 +44,31 @@ class CartCell(QWidget):
         self.update()
         
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            multi_select = bool(event.modifiers() & Qt.ControlModifier) or bool(event.modifiers() & Qt.ShiftModifier)
+        multi_select = bool(event.modifiers() & Qt.ControlModifier) or bool(event.modifiers() & Qt.ShiftModifier)
+        
+        if event.button() == Qt.RightButton:
+            # Right click is for selection
             self.clicked.emit(self.item, multi_select)
-            
-    def mouseDoubleClickEvent(self, event):
+        elif event.button() == Qt.LeftButton:
+            # Left click is for play / hold
+            if self.item.play_mode == "Hold":
+                self.double_clicked.emit(self.item) # Signal play
+            elif self.item.play_mode == "Toggle":
+                # Signal play
+                self.double_clicked.emit(self.item)
+            else:
+                self.double_clicked.emit(self.item)
+                
+    def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.double_clicked.emit(self.item)
+            if self.item.play_mode == "Hold" and self.item.is_playing:
+                # Issue STOP if holding mode
+                # We need a new signal for stopping or just handle it directly, but let's signal double_clicked which acts as toggle normally
+                # Wait, if we emit double_clicked it just plays again theoretically?
+                # Actually, our _on_item_play method in soundboard.py natively toggles if it's already playing in Toggle mode.
+                # In Hold mode, we must stop it.
+                # A quick fix is to pass a release signal.
+                self.double_clicked.emit(self.item) # we will modify soundboard.py to handle Hold stop properly
             
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -86,10 +104,9 @@ class CartCell(QWidget):
         
         # Draw Progress Bar if playing
         if self.item.is_playing and self.item.end_time > 0:
-            duration = self.item.end_time - self.item.start_time
-            if duration > 0:
-                prog_w = int((self.item.progress / duration) * rect.width())
-                painter.fillRect(QRect(0, rect.height() - 8, prog_w, 8), QColor("#00ff00"))
+            duration = max(0.1, self.item.end_time - self.item.start_time)
+            prog_w = int((self.item.progress / duration) * rect.width())
+            painter.fillRect(QRect(0, rect.height() - 8, prog_w, 8), QColor("#00ff00"))
                 
         # Border
         if self.is_selected:

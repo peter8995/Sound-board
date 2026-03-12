@@ -95,36 +95,36 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(top_bar)
         
-        # --- View Switcher ---
-        view_bar = QHBoxLayout()
-        self.btn_view_cart = QPushButton("CART Mode")
-        self.btn_view_playlist = QPushButton("Playlist Mode")
-        self.btn_view_cart.clicked.connect(lambda: self.stack.setCurrentIndex(0))
-        self.btn_view_playlist.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        # --- Main Content Area (Splitter) ---
+        from PySide6.QtWidgets import QSplitter
+        self.splitter = QSplitter(Qt.Horizontal)
         
-        view_bar.addWidget(self.btn_view_cart)
-        view_bar.addWidget(self.btn_view_playlist)
-        view_bar.addStretch()
-        main_layout.addLayout(view_bar)
-        
-        # --- Main Content Area ---
-        self.stack = QStackedWidget()
-        
-        # CART View
+        # Left Panel - CART View
+        cart_panel = QWidget()
+        cart_layout = QVBoxLayout(cart_panel)
+        cart_layout.setContentsMargins(0, 0, 0, 0)
         self.cart_view = CartGrid()
         self.cart_view.item_selected.connect(self._on_item_selected)
         self.cart_view.item_play_requested.connect(self._on_item_play)
         self.cart_view.file_dropped.connect(self._on_file_dropped)
-        self.stack.addWidget(self.cart_view)
+        cart_layout.addWidget(self.cart_view)
         
-        # Playlist View
+        # Right Panel - Playlist View
+        playlist_panel = QWidget()
+        playlist_layout = QVBoxLayout(playlist_panel)
+        playlist_layout.setContentsMargins(0, 0, 0, 0)
         self.playlist_view = PlaylistView()
         self.playlist_view.item_selected.connect(self._on_item_selected)
         self.playlist_view.item_play_requested.connect(self._on_item_play)
         self.playlist_view.list_changed.connect(lambda: setattr(self, 'is_dirty', True))
-        self.stack.addWidget(self.playlist_view)
+        playlist_layout.addWidget(self.playlist_view)
         
-        main_layout.addWidget(self.stack, 1)
+        self.splitter.addWidget(cart_panel)
+        self.splitter.addWidget(playlist_panel)
+        self.splitter.setStretchFactor(0, 3) # Give Cart area more default width
+        self.splitter.setStretchFactor(1, 1) # Give Playlist area less width
+        
+        main_layout.addWidget(self.splitter, 1)
         
         # --- Bottom Panel (Waveform + Item Properties) ---
         bottom_layout = QHBoxLayout()
@@ -139,6 +139,7 @@ class MainWindow(QMainWindow):
         bottom_layout.addWidget(self.prop_group)
         
         self.waveform_panel = WaveformPanel()
+        self.waveform_panel.properties_changed.connect(lambda: self.prop_panel.set_items(self.selected_items))
         bottom_layout.addWidget(self.waveform_panel, 1)
         
         main_layout.addLayout(bottom_layout)
@@ -300,7 +301,12 @@ class MainWindow(QMainWindow):
             l, r = self.audio_engine.meter_queue.get()
             self.level_meter.set_levels(l, r)
             
-        self.level_meter.set_levels(max(0, self.level_meter.l_level - 0.05), max(0, self.level_meter.r_level - 0.05))
+        for item in self.project.items:
+            if item.is_playing:
+                # Get exact playback position from engine if needed, but it should be synced
+                # Actually audio_engine syncs item.progress automatically in _audio_callback
+                pass
+                
         self.cart_view.update_cells()
         self.playlist_view.update_cells()
         
@@ -383,10 +389,16 @@ class MainWindow(QMainWindow):
         self.prop_panel.set_items(self.selected_items)
         
         item = self.selected_item
-        if item and item.file_path and item.uid in self.audio_engine.audio_cache:
-            data = self.audio_engine.audio_cache[item.uid]
-            sr = self.audio_engine.sr_cache[item.uid]
-            self.waveform_panel.set_audio(data, item, sr)
+        if item and item.file_path:
+            if item.uid not in self.audio_engine.audio_cache:
+                self.audio_engine.load_audio(item.uid, item.file_path)
+                
+            if item.uid in self.audio_engine.audio_cache:
+                data = self.audio_engine.audio_cache[item.uid]
+                sr = self.audio_engine.samplerate
+                self.waveform_panel.set_audio(data, item, sr)
+            else:
+                self.waveform_panel.set_audio(None, item)
         else:
             self.waveform_panel.set_audio(None, item)
             
@@ -411,7 +423,7 @@ class MainWindow(QMainWindow):
                 
         if self.audio_engine.load_audio(item.uid, item.file_path):
             data = self.audio_engine.audio_cache[item.uid]
-            sr = self.audio_engine.sr_cache[item.uid]
+            sr = self.audio_engine.samplerate
             item.end_time = len(data) / sr
             
         self.is_dirty = True
@@ -440,7 +452,7 @@ class MainWindow(QMainWindow):
                 
                 if self.audio_engine.load_audio(item.uid, item.file_path):
                     data = self.audio_engine.audio_cache[item.uid]
-                    sr = self.audio_engine.sr_cache[item.uid]
+                    sr = self.audio_engine.samplerate
                     item.end_time = len(data) / sr
                     self.project.items.append(item)
                     self.is_dirty = True

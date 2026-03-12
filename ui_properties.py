@@ -1,7 +1,39 @@
 from PySide6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QDoubleSpinBox, 
                                QSpinBox, QComboBox, QCheckBox, QPushButton, 
-                               QColorDialog)
+                               QColorDialog, QDialog, QVBoxLayout, QLabel,
+                               QHBoxLayout, QSlider)
 from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QKeySequence
+
+class HotkeyDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Press any key...")
+        self.setModal(True)
+        self.setFixedSize(250, 100)
+        
+        layout = QVBoxLayout(self)
+        self.label = QLabel("Press a key combination to assign...")
+        self.label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label)
+        
+        self.key_sequence = ""
+        
+    def keyPressEvent(self, event):
+        # Ignore raw modifiers
+        if event.key() in (Qt.Key_Shift, Qt.Key_Control, Qt.Key_Alt, Qt.Key_Meta):
+            return
+            
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+            return
+            
+        modifiers = event.modifiers()
+        key = event.key()
+        
+        ks = QKeySequence(key | modifiers)
+        self.key_sequence = ks.toString()
+        self.accept()
 
 class PropertiesPanel(QWidget):
     properties_changed = Signal()
@@ -16,16 +48,27 @@ class PropertiesPanel(QWidget):
         self.name_edit = QLineEdit()
         self.name_edit.textChanged.connect(self._on_name_changed)
         
-        self.hotkey_edit = QLineEdit()
-        self.hotkey_edit.textChanged.connect(self._on_hotkey_changed)
+        self.hotkey_btn = QPushButton("Not Set")
+        self.hotkey_btn.clicked.connect(self._on_hotkey_clicked)
+        self.hotkey_clear_btn = QPushButton("Clear")
+        self.hotkey_clear_btn.clicked.connect(self._on_hotkey_clear)
+        hotkey_layout = QHBoxLayout()
+        hotkey_layout.setContentsMargins(0, 0, 0, 0)
+        hotkey_layout.addWidget(self.hotkey_btn)
+        hotkey_layout.addWidget(self.hotkey_clear_btn)
         
         self.color_btn = QPushButton("Select Color")
         self.color_btn.clicked.connect(self._on_color_clicked)
         
-        self.vol_spin = QDoubleSpinBox()
-        self.vol_spin.setRange(0.0, 5.0)
-        self.vol_spin.setSingleStep(0.1)
-        self.vol_spin.valueChanged.connect(self._on_vol_changed)
+        self.vol_slider = QSlider(Qt.Horizontal)
+        self.vol_slider.setRange(0, 200)
+        self.vol_slider.valueChanged.connect(self._on_vol_changed)
+        self.vol_label = QLabel("100%")
+        self.vol_label.setFixedWidth(50)
+        vol_layout = QHBoxLayout()
+        vol_layout.setContentsMargins(0, 0, 0, 0)
+        vol_layout.addWidget(self.vol_slider)
+        vol_layout.addWidget(self.vol_label)
         
         self.fi_spin = QDoubleSpinBox()
         self.fi_spin.setRange(0.0, 60.0)
@@ -59,9 +102,9 @@ class PropertiesPanel(QWidget):
         self.auto_next_check.stateChanged.connect(self._on_auto_next_changed)
         
         self.layout.addRow("Name:", self.name_edit)
-        self.layout.addRow("Hotkey:", self.hotkey_edit)
+        self.layout.addRow("Hotkey:", hotkey_layout)
         self.layout.addRow("Color:", self.color_btn)
-        self.layout.addRow("Volume:", self.vol_spin)
+        self.layout.addRow("Volume:", vol_layout)
         self.layout.addRow("Fade In (s):", self.fi_spin)
         self.layout.addRow("Fade Out (s):", self.fo_spin)
         self.layout.addRow("Start Time:", self.st_spin)
@@ -97,11 +140,15 @@ class PropertiesPanel(QWidget):
         
         # Hotkey
         c_hotkey = get_common("hotkey")
-        self.hotkey_edit.setText(c_hotkey if c_hotkey is not None else "<Multiple>")
+        self.hotkey_btn.setText(c_hotkey if c_hotkey else "Not Set")
         
         # Volume
         c_vol = get_common("volume")
-        if c_vol is not None: self.vol_spin.setValue(c_vol)
+        if c_vol is not None: 
+            self.vol_slider.blockSignals(True)
+            self.vol_slider.setValue(int(c_vol * 100))
+            self.vol_label.setText(f"{int(c_vol * 100)}%")
+            self.vol_slider.blockSignals(False)
         
         # Fade In
         c_fi = get_common("fade_in")
@@ -154,11 +201,19 @@ class PropertiesPanel(QWidget):
     def _on_name_changed(self, text):
         if text != "<Multiple>": self._apply_to_all("name", text)
         
-    def _on_hotkey_changed(self, text):
-        if text != "<Multiple>": self._apply_to_all("hotkey", text)
+    def _on_hotkey_clicked(self):
+        d = HotkeyDialog(self)
+        if d.exec() == QDialog.Accepted and d.key_sequence:
+            self.hotkey_btn.setText(d.key_sequence)
+            self._apply_to_all("hotkey", d.key_sequence)
+            
+    def _on_hotkey_clear(self):
+        self.hotkey_btn.setText("Not Set")
+        self._apply_to_all("hotkey", "")
         
     def _on_vol_changed(self, val):
-        self._apply_to_all("volume", val)
+        self.vol_label.setText(f"{val}%")
+        self._apply_to_all("volume", val / 100.0)
         
     def _on_fi_changed(self, val):
         self._apply_to_all("fade_in", val)

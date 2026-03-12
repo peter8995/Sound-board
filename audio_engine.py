@@ -147,7 +147,7 @@ class AudioEngine:
                 # Stop all other tracks
                 for u in list(self.active_tracks.keys()):
                     if u != item.uid:
-                        del self.active_tracks[u]
+                        self._mark_track_finished(u)
                         
         return True
         

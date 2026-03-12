@@ -61,6 +61,8 @@ class LevelMeter(QWidget):
                 painter.fillRect(int(x), int(1 + half_h + 1), int(seg_w), int(half_h), c.darker(300))
 
 class WaveformPanel(QWidget):
+    properties_changed = Signal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(150)
@@ -245,6 +247,7 @@ class WaveformPanel(QWidget):
                     nodes.pop(clicked_node_idx)
                     self.item.volume_nodes = nodes
                     self.update()
+                    self.properties_changed.emit()
             else:
                 self.drag_mode = "node"
                 self.drag_node_idx = clicked_node_idx
@@ -259,6 +262,7 @@ class WaveformPanel(QWidget):
                 # find index
                 self.drag_node_idx = nodes.index(new_node)
                 self.update()
+                self.properties_changed.emit()
             
     def mouseMoveEvent(self, event):
         if self.audio_data is None or self.item is None or self.drag_mode == "none":
@@ -276,8 +280,10 @@ class WaveformPanel(QWidget):
         if self.drag_mode == "start":
             end_t = self.item.end_time if self.item.end_time > 0 else total_seconds
             self.item.start_time = max(0.0, min(time_val, end_t))
+            self.properties_changed.emit()
         elif self.drag_mode == "end":
             self.item.end_time = max(self.item.start_time, min(time_val, total_seconds))
+            self.properties_changed.emit()
         elif self.drag_mode == "node" and self.drag_node_idx != -1:
             nodes = self.item.volume_nodes
             # Clamp time to preserve order (roughly)
@@ -288,6 +294,7 @@ class WaveformPanel(QWidget):
             
             nodes[self.drag_node_idx]["time"] = time_val
             nodes[self.drag_node_idx]["volume"] = max(0.0, min(1.0, vol_val))
+            self.properties_changed.emit()
             
         self.update()
         
