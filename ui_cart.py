@@ -72,7 +72,7 @@ class CartCell(QWidget):
         
         # Background Color dependent on state
         if self.item.is_playing:
-            bg_color = QColor("#00aa00") # Playing - Green
+            bg_color = QColor("#005500") # Playing base - Dark Green
         elif self.is_selected:
             bg_color = QColor(self.item.color).lighter(150) # Selected highlight
         else:
@@ -89,7 +89,7 @@ class CartCell(QWidget):
             duration = self.item.end_time - self.item.start_time
             if duration > 0:
                 prog_w = int((self.item.progress / duration) * rect.width())
-                painter.fillRect(QRect(0, rect.height() - 5, prog_w, 5), QColor("#00ff00"))
+                painter.fillRect(QRect(0, rect.height() - 8, prog_w, 8), QColor("#00ff00"))
                 
         # Border
         if self.is_selected:

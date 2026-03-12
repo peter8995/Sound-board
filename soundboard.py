@@ -203,11 +203,34 @@ class MainWindow(QMainWindow):
             
     def _new_project(self):
         if self._confirm_save():
-            self.project = ProjectState()
-            self.cart_view.populate(self.project.items, self.project.rows, self.project.cols)
-            self.playlist_view.populate(self.project.playlist, self.audio_engine)
-            self.is_dirty = False
-            self.setWindowTitle("SoundBoard - Untitled Project")
+            d = QDialog(self)
+            d.setWindowTitle("New Project - Grid Size")
+            layout = QFormLayout(d)
+            
+            spin_rows = QSpinBox()
+            spin_rows.setRange(1, 20)
+            spin_rows.setValue(4)
+            
+            spin_cols = QSpinBox()
+            spin_cols.setRange(1, 20)
+            spin_cols.setValue(5)
+            
+            layout.addRow("Rows:", spin_rows)
+            layout.addRow("Columns:", spin_cols)
+            
+            btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            btns.accepted.connect(d.accept)
+            btns.rejected.connect(d.reject)
+            layout.addWidget(btns)
+            
+            if d.exec() == QDialog.Accepted:
+                self.project = ProjectState()
+                self.project.rows = spin_rows.value()
+                self.project.cols = spin_cols.value()
+                self.cart_view.populate(self.project.items, self.project.rows, self.project.cols)
+                self.playlist_view.populate(self.project.playlist, self.audio_engine)
+                self.is_dirty = False
+                self.setWindowTitle("SoundBoard - Untitled Project")
 
     def _open_project(self):
         if self._confirm_save():
@@ -285,6 +308,17 @@ class MainWindow(QMainWindow):
             self.waveform_panel.update_progress(self.selected_item.progress)
         elif self.selected_item:
             self.waveform_panel.update_progress(0)
+            
+        # Check for auto_next triggers
+        for idx, item in enumerate(self.project.playlist):
+            if getattr(item, '_needs_auto_next', False):
+                item._needs_auto_next = False
+                if idx + 1 < len(self.project.playlist):
+                    next_item = self.project.playlist[idx + 1]
+                    self._on_item_play(next_item)
+                    # Automatically select the next item
+                    self.playlist_view.list_widget.setCurrentRow(idx + 1)
+                    self._on_item_selected([next_item])
             
     def _update_clock(self):
         current_time = QTime.currentTime()
@@ -422,6 +456,29 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.audio_engine.stop_all()
+            return
+            
+        # Ignore hotkeys if user is editing text (like Name or Hotkey field)
+        focus_widget = QApplication.focusWidget()
+        if isinstance(focus_widget, (QLineEdit, QDoubleSpinBox, QSpinBox)):
+            super().keyPressEvent(event)
+            return
+            
+        # Match hotkeys
+        key_name = event.text().upper()
+        if not key_name and event.key():
+            from PySide6.QtGui import QKeySequence
+            key_name = QKeySequence(event.key()).toString().upper()
+            
+        if not key_name:
+            return
+            
+        for item in self.project.items:
+            if item.hotkey.upper() == key_name:
+                self._on_item_play(item)
+                return
+                
+        super().keyPressEvent(event)
         
 def main():
     app = QApplication(sys.argv)

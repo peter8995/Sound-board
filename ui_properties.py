@@ -55,6 +55,9 @@ class PropertiesPanel(QWidget):
         self.excl_check = QCheckBox()
         self.excl_check.stateChanged.connect(self._on_excl_changed)
         
+        self.auto_next_check = QCheckBox()
+        self.auto_next_check.stateChanged.connect(self._on_auto_next_changed)
+        
         self.layout.addRow("Name:", self.name_edit)
         self.layout.addRow("Hotkey:", self.hotkey_edit)
         self.layout.addRow("Color:", self.color_btn)
@@ -66,6 +69,7 @@ class PropertiesPanel(QWidget):
         self.layout.addRow("Play Mode:", self.mode_combo)
         self.layout.addRow("Loop Count:", self.loop_spin)
         self.layout.addRow("Exclusive:", self.excl_check)
+        self.layout.addRow("Auto Next (Playlist):", self.auto_next_check)
         
         self.setEnabled(False)
         
@@ -131,6 +135,13 @@ class PropertiesPanel(QWidget):
         else:
             self.excl_check.setCheckState(Qt.PartiallyChecked)
             
+        # Auto Next
+        c_auto = get_common("auto_next")
+        if c_auto is not None:
+            self.auto_next_check.setCheckState(Qt.Checked if c_auto else Qt.Unchecked)
+        else:
+            self.auto_next_check.setCheckState(Qt.PartiallyChecked)
+            
         self._is_updating = False
 
     def _apply_to_all(self, attr, value):
@@ -170,6 +181,10 @@ class PropertiesPanel(QWidget):
     def _on_excl_changed(self, state):
         if state != Qt.PartiallyChecked.value:
             self._apply_to_all("exclusive", state == Qt.Checked.value)
+            
+    def _on_auto_next_changed(self, state):
+        if state != Qt.PartiallyChecked.value:
+            self._apply_to_all("auto_next", state == Qt.Checked.value)
             
     def _on_color_clicked(self):
         # Open color picker

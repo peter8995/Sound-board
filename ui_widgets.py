@@ -27,8 +27,8 @@ class LevelMeter(QWidget):
         painter.fillRect(rect, QColor("#1e1e1e"))
         
         # Segment bars
-        segments = 30
-        gap = 2
+        segments = 40
+        gap = 1
         seg_w = (w - (segments+1)*gap) / segments
         
         half_h = (h - 3) / 2
@@ -36,7 +36,7 @@ class LevelMeter(QWidget):
         for i in range(segments):
             x = gap + i * (seg_w + gap)
             
-            # Color logic based on position
+            # Color logic based on position -> Green (0-0.6), Yellow (0.6-0.85), Red (0.85-1.0)
             ratio = i / segments
             if ratio < 0.6:
                 c = QColor("#00ff00") # Green
@@ -45,17 +45,20 @@ class LevelMeter(QWidget):
             else:
                 c = QColor("#ff0000") # Red
                 
+            # Outline
+            painter.setPen(QColor(0, 0, 0, 0))
+            
             # Left channel
             if ratio <= self.l_level:
-                painter.fillRect(QRect(x, 1, seg_w, half_h), c)
+                painter.fillRect(int(x), 1, int(seg_w), int(half_h), c)
             else:
-                painter.fillRect(QRect(x, 1, seg_w, half_h), c.darker(300))
+                painter.fillRect(int(x), 1, int(seg_w), int(half_h), c.darker(300))
                 
             # Right channel
             if ratio <= self.r_level:
-                painter.fillRect(QRect(x, 1 + half_h + 1, seg_w, half_h), c)
+                painter.fillRect(int(x), int(1 + half_h + 1), int(seg_w), int(half_h), c)
             else:
-                painter.fillRect(QRect(x, 1 + half_h + 1, seg_w, half_h), c.darker(300))
+                painter.fillRect(int(x), int(1 + half_h + 1), int(seg_w), int(half_h), c.darker(300))
 
 class WaveformPanel(QWidget):
     def __init__(self, parent=None):

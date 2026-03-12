@@ -15,11 +15,11 @@ class PlaylistDelegate(QStyledItemDelegate):
         rect = option.rect
         
         if item_data and getattr(item_data, 'is_playing', False):
-            # Playing: Green bg representing progress
+            # Playing: Green bg representing progress, rest is light grey so black text is visible
             duration = getattr(item_data, 'end_time', 0) - getattr(item_data, 'start_time', 0)
             prog = getattr(item_data, 'progress', 0)
             
-            painter.fillRect(rect, QColor("#2b2b2b")) # base
+            painter.fillRect(rect, QColor("#aaaaaa")) # base (light grey)
             if duration > 0:
                 prog_w = int((prog / duration) * rect.width())
                 painter.fillRect(QRect(rect.left(), rect.top(), prog_w, rect.height()), QColor("#00ff00"))
