@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPainterPath
-from PySide6.QtCore import Qt, QRect
+from PySide6.QtCore import Qt, QRect, Signal
 
 class LevelMeter(QWidget):
     def __init__(self, parent=None):
