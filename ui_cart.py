@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal, QRect
 class CartCell(QWidget):
     clicked = Signal(object, bool) # Emit the AudioItem and a boolean for multi_select modifier
     double_clicked = Signal(object)
+    hold_released = Signal(object) # Emit when Hold mode mouse released
     file_dropped = Signal(object, str) # Emit (item, filepath)
     
     def __init__(self, item, parent=None):
@@ -62,13 +63,7 @@ class CartCell(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             if self.item.play_mode == "Hold" and self.item.is_playing:
-                # Issue STOP if holding mode
-                # We need a new signal for stopping or just handle it directly, but let's signal double_clicked which acts as toggle normally
-                # Wait, if we emit double_clicked it just plays again theoretically?
-                # Actually, our _on_item_play method in soundboard.py natively toggles if it's already playing in Toggle mode.
-                # In Hold mode, we must stop it.
-                # A quick fix is to pass a release signal.
-                self.double_clicked.emit(self.item) # we will modify soundboard.py to handle Hold stop properly
+                self.hold_released.emit(self.item)
             
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -119,6 +114,7 @@ class CartCell(QWidget):
 class CartGrid(QWidget):
     item_selected = Signal(list) # Now emits list of selected items
     item_play_requested = Signal(object)
+    hold_release_requested = Signal(object)
     file_dropped = Signal(object, str)
     
     def __init__(self, parent=None):
@@ -147,6 +143,7 @@ class CartGrid(QWidget):
                 cell = CartCell(item)
                 cell.clicked.connect(self._on_cell_clicked)
                 cell.double_clicked.connect(self._on_cell_double_clicked)
+                cell.hold_released.connect(self.hold_release_requested.emit)
                 cell.file_dropped.connect(self.file_dropped.emit)
                 self.layout.addWidget(cell, r, c)
                 self.cells.append(cell)

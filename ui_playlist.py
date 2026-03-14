@@ -203,7 +203,7 @@ class PlaylistView(QWidget):
             # Preload briefly to get length
             if self.audio_engine.load_audio(uid, path):
                 data = self.audio_engine.audio_cache[uid]
-                sr = self.audio_engine.sr_cache[uid]
+                sr = self.audio_engine.samplerate
                 item.end_time = len(data) / sr
                 
             self.project_list.append(item)

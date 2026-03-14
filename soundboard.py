@@ -3,7 +3,8 @@ import os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QSlider, QStackedWidget,
                                QGroupBox, QComboBox, QFileDialog, QMessageBox, QMenuBar,
-                               QInputDialog, QDialog, QFormLayout, QSpinBox, QDialogButtonBox)
+                               QInputDialog, QDialog, QFormLayout, QSpinBox, QDialogButtonBox,
+                               QLineEdit, QDoubleSpinBox, QSplitter)
 from PySide6.QtCore import Qt, QTimer, QTime
 from PySide6.QtGui import QFont, QColor
 
@@ -95,54 +96,50 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(top_bar)
         
-        # --- Main Content Area (Splitter) ---
-        from PySide6.QtWidgets import QSplitter
+        # --- Main Content Area ---
+        # Layout: Left(Cart+Properties) | Right(Playlist full height)
+        #         Waveform spans full width at bottom
+
         self.splitter = QSplitter(Qt.Horizontal)
-        
-        # Left Panel - CART View
-        cart_panel = QWidget()
-        cart_layout = QVBoxLayout(cart_panel)
-        cart_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Left Panel - CART + Properties stacked vertically
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
         self.cart_view = CartGrid()
         self.cart_view.item_selected.connect(self._on_item_selected)
         self.cart_view.item_play_requested.connect(self._on_item_play)
+        self.cart_view.hold_release_requested.connect(self._on_hold_released)
         self.cart_view.file_dropped.connect(self._on_file_dropped)
-        cart_layout.addWidget(self.cart_view)
-        
-        # Right Panel - Playlist View
-        playlist_panel = QWidget()
-        playlist_layout = QVBoxLayout(playlist_panel)
-        playlist_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.addWidget(self.cart_view, 1)
+
+        # Properties editor below cart
+        from ui_properties import PropertiesPanel
+        self.prop_group = QGroupBox("Selected Item Properties")
+        prop_inner = QVBoxLayout(self.prop_group)
+        self.prop_panel = PropertiesPanel()
+        self.prop_panel.properties_changed.connect(self._on_properties_changed)
+        prop_inner.addWidget(self.prop_panel)
+        left_layout.addWidget(self.prop_group)
+
+        # Right Panel - Playlist (full height)
         self.playlist_view = PlaylistView()
         self.playlist_view.item_selected.connect(self._on_item_selected)
         self.playlist_view.item_play_requested.connect(self._on_item_play)
         self.playlist_view.list_changed.connect(lambda: setattr(self, 'is_dirty', True))
-        playlist_layout.addWidget(self.playlist_view)
-        
-        self.splitter.addWidget(cart_panel)
-        self.splitter.addWidget(playlist_panel)
-        self.splitter.setStretchFactor(0, 3) # Give Cart area more default width
-        self.splitter.setStretchFactor(1, 1) # Give Playlist area less width
-        
+
+        self.splitter.addWidget(left_panel)
+        self.splitter.addWidget(self.playlist_view)
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
+
         main_layout.addWidget(self.splitter, 1)
-        
-        # --- Bottom Panel (Waveform + Item Properties) ---
-        bottom_layout = QHBoxLayout()
-        
-        # Properties editor
-        from ui_properties import PropertiesPanel
-        self.prop_group = QGroupBox("Selected Item Properties")
-        prop_layout = QVBoxLayout(self.prop_group)
-        self.prop_panel = PropertiesPanel()
-        self.prop_panel.properties_changed.connect(self._on_properties_changed)
-        prop_layout.addWidget(self.prop_panel)
-        bottom_layout.addWidget(self.prop_group)
-        
+
+        # --- Bottom: Waveform (full width) ---
         self.waveform_panel = WaveformPanel()
         self.waveform_panel.properties_changed.connect(lambda: self.prop_panel.set_items(self.selected_items))
-        bottom_layout.addWidget(self.waveform_panel, 1)
-        
-        main_layout.addLayout(bottom_layout)
+        main_layout.addWidget(self.waveform_panel)
         
         # Init Default Device
         import sounddevice as sd
@@ -434,6 +431,11 @@ class MainWindow(QMainWindow):
     def _play_selected(self):
         if self.selected_item:
             self._on_item_play(self.selected_item)
+
+    def _on_hold_released(self, item):
+        if item.is_playing and item.play_mode == "Hold":
+            self.audio_engine.stop(item.uid, fade_out_time=item.fade_out)
+            item.is_playing = False
 
     def _pause_all(self):
         # We will add it to engine

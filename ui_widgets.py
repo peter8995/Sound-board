@@ -280,24 +280,22 @@ class WaveformPanel(QWidget):
         if self.drag_mode == "start":
             end_t = self.item.end_time if self.item.end_time > 0 else total_seconds
             self.item.start_time = max(0.0, min(time_val, end_t))
-            self.properties_changed.emit()
         elif self.drag_mode == "end":
             self.item.end_time = max(self.item.start_time, min(time_val, total_seconds))
-            self.properties_changed.emit()
         elif self.drag_mode == "node" and self.drag_node_idx != -1:
             nodes = self.item.volume_nodes
-            # Clamp time to preserve order (roughly)
             min_t = nodes[self.drag_node_idx - 1]["time"] if self.drag_node_idx > 0 else 0
             max_t = nodes[self.drag_node_idx + 1]["time"] if self.drag_node_idx < len(nodes) - 1 else total_seconds
-            
+
             time_val = max(min_t, min(time_val, max_t))
-            
+
             nodes[self.drag_node_idx]["time"] = time_val
             nodes[self.drag_node_idx]["volume"] = max(0.0, min(1.0, vol_val))
-            self.properties_changed.emit()
             
         self.update()
         
     def mouseReleaseEvent(self, event):
+        if self.drag_mode != "none":
+            self.properties_changed.emit()
         self.drag_mode = "none"
         self.drag_node_idx = -1

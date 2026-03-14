@@ -110,27 +110,29 @@ class ProjectState:
         json_path = os.path.join(self.project_path, "project.json")
         audio_folder = self.get_audio_folder()
         
-        # Determine unique files to copy if needed
+        # Copy external files into project folder, then update paths
+        path_updates = []
         for item in self.items + self.playlist:
             if item.file_path and os.path.exists(item.file_path):
-                # If file is not already in the project audio folder
                 if not item.file_path.startswith(audio_folder):
                     filename = os.path.basename(item.file_path)
                     new_path = os.path.join(audio_folder, filename)
-                    
-                    # Handle name collisions
+
                     base, ext = os.path.splitext(filename)
                     counter = 1
                     while os.path.exists(new_path) and new_path != item.file_path:
-                        # Simple collision check, though we might overwrite if it's the exact same file
                         new_path = os.path.join(audio_folder, f"{base}_{counter}{ext}")
                         counter += 1
-                        
+
                     try:
                         shutil.copy2(item.file_path, new_path)
-                        item.file_path = new_path
+                        path_updates.append((item, new_path))
                     except Exception as e:
                         print(f"Error copying {item.file_path} to project folder: {e}")
+
+        # Apply path updates only after all copies succeed
+        for item, new_path in path_updates:
+            item.file_path = new_path
         
         data = {
             "rows": self.rows,

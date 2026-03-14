@@ -28,10 +28,7 @@ class HotkeyDialog(QDialog):
             self.reject()
             return
             
-        modifiers = event.modifiers()
-        key = event.key()
-        
-        ks = QKeySequence(key | modifiers)
+        ks = QKeySequence(event.keyCombination())
         self.key_sequence = ks.toString()
         self.accept()
 

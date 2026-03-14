@@ -245,8 +245,8 @@ class AudioEngine:
                 # Copy original slice to avoid modifying cache
                 chunk = data[pos:pos+chunk_size].copy()
                 
-                # Base track volume
-                chunk *= state['volume']
+                # Base track volume (read live from item for real-time slider updates)
+                chunk *= state['item_ref'].volume
                 
                 # Apply Fade In
                 fade_in_smp = state['fade_in_samples']
