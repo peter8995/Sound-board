@@ -89,7 +89,7 @@ class CustomListWidget(QListWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
-        self.custom_selected_items = set()
+        self.custom_selected_items = []
         
     def mousePressEvent(self, event):
         item = self.itemAt(event.pos())
@@ -106,7 +106,7 @@ class CustomListWidget(QListWidget):
             if item_data in self.custom_selected_items:
                 self.custom_selected_items.remove(item_data)
             else:
-                self.custom_selected_items.add(item_data)
+                self.custom_selected_items.append(item_data)
                 
             self.viewport().update()
             self.custom_selection_changed.emit(list(self.custom_selected_items))
