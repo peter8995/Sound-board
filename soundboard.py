@@ -182,26 +182,6 @@ class MainWindow(QMainWindow):
         action_grid = settings_menu.addAction("Configure Grid Size")
         action_grid.triggered.connect(self._configure_grid_size)
         
-    def showEvent(self, event):
-        super().showEvent(event)
-        # Show startup dialog only once when window is first shown
-        if not hasattr(self, '_startup_done'):
-            self._startup_done = True
-            QTimer.singleShot(100, self._show_startup_dialog)
-
-    def _show_startup_dialog(self):
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Welcome to SoundBoard")
-        msg.setText("Do you want to create a new project or open an existing one?")
-        btn_new = msg.addButton("New Project", QMessageBox.ActionRole)
-        btn_open = msg.addButton("Open Project", QMessageBox.ActionRole)
-        msg.exec()
-        
-        if msg.clickedButton() == btn_open:
-            self._open_project()
-        else:
-            self._new_project()
-            
     def _new_project(self):
         if self._confirm_save():
             d = QDialog(self)
