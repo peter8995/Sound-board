@@ -17,7 +17,7 @@ All notable changes to SoundBoard will be documented in this file.
 ### Improvements
 - **版面佈局重組** — 左側 CART + 屬性面板，右側播放清單佔滿完整高度，波形圖橫跨底部全寬
 - **效能優化** — 波形圖拖曳時不再每幀觸發 properties 面板重建，改為放開滑鼠時才更新
-- **Crash Log** — 新增日誌系統，自動記錄至 exe 同層 `logs/soundboard.log`，閃退時彈出對話框顯示 log 路徑
+- **Crash Log** — 新增日誌系統，每次啟動產生獨立 log 檔 `logs/soundboard_YYYYMMDD_HHMMSS.log`，含毫秒精度、檔案行號、函數名等詳細資訊，自動保留最近 10 個，閃退時彈出對話框顯示 log 路徑
 - **README** — 新增完整功能說明及操作指南
 
 ---

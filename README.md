@@ -44,7 +44,7 @@
 - 快捷鍵錄製（彈出視窗捕捉按鍵）
 - 系統時間顯示
 - 全局播放/暫停/停止按鈕
-- Crash Log 自動記錄至 `~/.soundboard/logs/soundboard.log`
+- Crash Log 自動記錄至 `logs/soundboard_YYYYMMDD_HHMMSS.log`
 
 ## 系統需求
 
@@ -101,7 +101,7 @@ Sound-board/
 
 閃退時的日誌記錄在：
 
-exe 或 .py 同層目錄下的 `logs/soundboard.log`
+exe 或 .py 同層目錄下的 `logs/soundboard_YYYYMMDD_HHMMSS.log`（每次啟動產生獨立檔案，自動保留最近 10 個）
 
 ## 授權
 
