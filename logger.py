@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 if getattr(sys, 'frozen', False):
@@ -8,13 +9,17 @@ if getattr(sys, 'frozen', False):
 else:
     _app_dir = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(_app_dir, "logs")
-LOG_FILE = os.path.join(LOG_DIR, "soundboard.log")
+
+_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = os.path.join(LOG_DIR, f"soundboard_{_timestamp}.log")
+
 
 def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
 
     fmt = logging.Formatter(
-        "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        "[%(asctime)s.%(msecs)03d] %(levelname)-8s "
+        "[%(name)s] %(filename)s:%(lineno)d %(funcName)s() — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -33,6 +38,21 @@ def setup_logging():
     root.addHandler(file_handler)
     root.addHandler(console_handler)
 
+    # Clean up old log files, keep latest 10
+    _cleanup_old_logs(keep=10)
+
+
+def _cleanup_old_logs(keep=10):
+    try:
+        logs = sorted(
+            [f for f in os.listdir(LOG_DIR) if f.startswith("soundboard_") and f.endswith(".log")],
+            reverse=True,
+        )
+        for old in logs[keep:]:
+            os.remove(os.path.join(LOG_DIR, old))
+    except Exception:
+        pass
+
 
 def install_excepthook():
     """Replace sys.excepthook so uncaught exceptions are logged before crash."""
@@ -43,7 +63,6 @@ def install_excepthook():
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
         logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
-        # Try to show a dialog (best-effort; app may already be broken)
         try:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(
