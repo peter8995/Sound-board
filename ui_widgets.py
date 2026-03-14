@@ -146,9 +146,9 @@ class WaveformPanel(QWidget):
                     vmin = chunk.min()
                     vmax = chunk.max()
                     
-                    y1 = half_h - (vmax * half_h)
-                    y2 = half_h - (vmin * half_h)
-                    
+                    y1 = int(half_h - (vmax * half_h))
+                    y2 = int(half_h - (vmin * half_h))
+
                     if x == 0:
                         path.moveTo(x, y1)
                         path.lineTo(x, y2)
