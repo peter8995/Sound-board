@@ -3,7 +3,11 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-LOG_DIR = os.path.join(os.path.expanduser("~"), ".soundboard", "logs")
+if getattr(sys, 'frozen', False):
+    _app_dir = os.path.dirname(sys.executable)
+else:
+    _app_dir = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(_app_dir, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "soundboard.log")
 
 def setup_logging():

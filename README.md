@@ -101,9 +101,7 @@ Sound-board/
 
 閃退時的日誌記錄在：
 
-```
-~/.soundboard/logs/soundboard.log
-```
+exe 或 .py 同層目錄下的 `logs/soundboard.log`
 
 ## 授權
 
