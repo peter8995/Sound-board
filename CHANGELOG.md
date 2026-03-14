@@ -4,6 +4,18 @@ All notable changes to SoundBoard will be documented in this file.
 
 ---
 
+## v0.2.3 (2026-03-15)
+
+### Bug Fixes
+- **播放清單閃退** — 修復 `AudioItem` 無法 hash 導致 playlist 選取/繪製時 crash（`custom_selected_items` 從 `set` 改為 `list`）
+- **波形圖閃退** — 修復 `numpy.float32` 傳入 PySide6 繪圖函數導致 `TypeError`
+
+### Changes
+- **移除啟動詢問視窗** — 開啟軟體時直接建立新專案，不再彈出「新增/開啟」對話框
+- **Crash Log 改進** — Log 檔名加入時間戳（`soundboard_YYYYMMDD_HHMMSS.log`），輸出包含毫秒精度、檔案行號、函數名，自動保留最近 10 個
+
+---
+
 ## v0.2.2 (2026-03-15)
 
 ### Bug Fixes
