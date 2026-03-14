@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QSlider, QStackedWidget,
                                QGroupBox, QComboBox, QFileDialog, QMessageBox, QMenuBar,
@@ -13,6 +14,8 @@ from audio_engine import AudioEngine
 from ui_widgets import LevelMeter, WaveformPanel
 from ui_cart import CartGrid
 from ui_playlist import PlaylistView
+
+logger = logging.getLogger("soundboard")
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -236,6 +239,7 @@ class MainWindow(QMainWindow):
             if folder:
                 new_proj = ProjectState()
                 if new_proj.load(folder):
+                    logger.info("Opened project: %s", folder)
                     self.project = new_proj
                     self.cart_view.populate(self.project.items, self.project.rows, self.project.cols)
                     self.playlist_view.populate(self.project.playlist, self.audio_engine)
@@ -252,6 +256,7 @@ class MainWindow(QMainWindow):
             return self._save_project_as()
             
         if self.project.save():
+            logger.info("Project saved: %s", self.project.project_path)
             self.is_dirty = False
             self.setWindowTitle(f"SoundBoard - {os.path.basename(self.project.project_path)}")
             return True
@@ -330,6 +335,7 @@ class MainWindow(QMainWindow):
     def _change_device(self, idx):
         device_id = self.device_combo.itemData(idx)
         if device_id is not None:
+            logger.info("Switching audio device to %s (buffer=%d)", self.device_combo.currentText(), self.project.buffer_size)
             self.audio_engine.set_device(device_id, self.project.buffer_size)
             self.project.output_device = self.device_combo.currentText()
             self.is_dirty = True
@@ -495,6 +501,13 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
         
 def main():
+    from logger import setup_logging, install_excepthook
+    setup_logging()
+    install_excepthook()
+
+    import PySide6
+    logger.info("SoundBoard starting — Python %s, PySide6 %s", sys.version.split()[0], PySide6.__version__)
+
     app = QApplication(sys.argv)
     font = QFont("Microsoft JhengHei", 10)
     app.setFont(font)

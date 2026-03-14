@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 import shutil
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+
+logger = logging.getLogger("soundboard.project")
 
 @dataclass
 class AudioItem:
@@ -128,7 +131,7 @@ class ProjectState:
                         shutil.copy2(item.file_path, new_path)
                         path_updates.append((item, new_path))
                     except Exception as e:
-                        print(f"Error copying {item.file_path} to project folder: {e}")
+                        logger.error("Error copying %s to project folder: %s", item.file_path, e)
 
         # Apply path updates only after all copies succeed
         for item, new_path in path_updates:
@@ -168,5 +171,5 @@ class ProjectState:
                 self.playlist = [AudioItem.from_dict(d) for d in data.get("playlist", [])]
                 return True
             except Exception as e:
-                print(f"Error loading project file: {e}")
+                logger.error("Error loading project file: %s", e)
                 return False

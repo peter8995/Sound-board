@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -6,6 +7,8 @@ import queue
 import scipy.signal
 import time
 from typing import Dict, List
+
+logger = logging.getLogger("soundboard.audio")
 
 class AudioEngine:
     def __init__(self):
@@ -44,7 +47,7 @@ class AudioEngine:
             if dev_sr > 0:
                 self.samplerate = dev_sr
         except Exception as e:
-            print(f"Could not get device info: {e}")
+            logger.warning("Could not get device info: %s", e)
             
         try:
             self.stream = sd.OutputStream(
@@ -66,7 +69,7 @@ class AudioEngine:
                 
             return True
         except Exception as e:
-            print(f"Error opening audio stream: {e}")
+            logger.error("Error opening audio stream: %s", e)
             return False
 
     def stop_stream(self):
@@ -83,7 +86,7 @@ class AudioEngine:
             
             # Resample if needed
             if sr != self.samplerate:
-                print(f"Resampling {file_path} from {sr} to {self.samplerate}...")
+                logger.info("Resampling %s from %d to %d", file_path, sr, self.samplerate)
                 data = scipy.signal.resample_poly(data, self.samplerate, sr, axis=0)
                 
             # Convert to stereo if mono, or keep first 2 channels if surround
@@ -97,7 +100,7 @@ class AudioEngine:
                 
             return True
         except Exception as e:
-            print(f"Error loading {file_path}: {e}")
+            logger.error("Error loading %s: %s", file_path, e)
             return False
             
     def play(self, item):
