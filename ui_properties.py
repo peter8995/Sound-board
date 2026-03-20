@@ -1,9 +1,13 @@
-from PySide6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QDoubleSpinBox, 
-                               QSpinBox, QComboBox, QCheckBox, QPushButton, 
+from PySide6.QtWidgets import (QWidget, QFormLayout, QLineEdit, QDoubleSpinBox,
+                               QSpinBox, QComboBox, QCheckBox, QPushButton,
                                QColorDialog, QDialog, QVBoxLayout, QLabel,
                                QHBoxLayout, QSlider)
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QKeySequence
+
+import logging
+
+logger = logging.getLogger("soundboard")
 
 class HotkeyDialog(QDialog):
     def __init__(self, parent=None):
@@ -244,3 +248,58 @@ class PropertiesPanel(QWidget):
         if color.isValid():
             hex_color = color.name()
             self._apply_to_all("color", hex_color)
+
+
+class PropertiesDialog(QDialog):
+    """Non-modal dialog wrapping PropertiesPanel. Single instance, updated on right-click."""
+
+    properties_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Item Properties")
+        self.setMinimumWidth(350)
+        self.setStyleSheet("background-color: #2b2b2b; color: #ffffff;")
+        # Non-modal
+        self.setModal(False)
+
+        layout = QVBoxLayout(self)
+        self.panel = PropertiesPanel()
+        self.panel.properties_changed.connect(self.properties_changed.emit)
+        layout.addWidget(self.panel)
+
+        # Callback for forwarding hotkey events to main window
+        self._hotkey_callback = None
+        self._hotkey_release_callback = None
+
+    def set_hotkey_callbacks(self, press_cb, release_cb):
+        self._hotkey_callback = press_cb
+        self._hotkey_release_callback = release_cb
+
+    def set_items(self, items):
+        self.panel.set_items(items)
+        if items:
+            self.show()
+            self.raise_()
+
+    def keyPressEvent(self, event):
+        # ESC → close dialog (don't stop all, that's main window's job)
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+            return
+
+        # Try to forward as hotkey to main window
+        if self._hotkey_callback and self._hotkey_callback(event):
+            return
+
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        if self._hotkey_release_callback and self._hotkey_release_callback(event):
+            return
+        super().keyReleaseEvent(event)
+
+    def closeEvent(self, event):
+        # Just hide, don't destroy — we reuse the same instance
+        event.ignore()
+        self.hide()

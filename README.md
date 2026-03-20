@@ -7,7 +7,7 @@
 ### CART 格網系統
 - 自訂行列數量，格子自動縮放填滿畫面
 - 拖曳音檔至格子載入
-- 左鍵單擊播放（Toggle/Hold 模式），右鍵選取開啟屬性
+- 左鍵單擊播放（Toggle/Hold 模式），右鍵選取開啟屬性彈出視窗
 - 每個格子可設定：名稱、音量(0\~200%)、快捷鍵、顏色、淡入淡出、起始/結束時間、播放模式、播放次數、獨佔播放
 - 播放中顯示綠色背景、進度條、正計時/倒計時
 - 支援 Ctrl+右鍵多選，批次設定屬性
@@ -42,8 +42,10 @@
 ### 其他
 - ESC 全局停止播放
 - 快捷鍵錄製（彈出視窗捕捉按鍵）
+- 快捷鍵全域有效（即使焦點在屬性視窗輸入欄位中）
+- Hold 模式快捷鍵支援（按住播放、放開停止）
 - 系統時間顯示
-- 全局播放/暫停/停止按鈕
+- Pause/Play 切換按鈕 + Stop All
 - Crash Log 自動記錄至 `logs/soundboard_YYYYMMDD_HHMMSS.log`
 
 ## 系統需求
@@ -82,7 +84,7 @@ Sound-board/
 ├── project.py         # 資料模型及專案存讀取
 ├── ui_cart.py         # CART 格網 UI 元件
 ├── ui_playlist.py     # 播放清單 UI 元件
-├── ui_properties.py   # 屬性編輯面板
+├── ui_properties.py   # 屬性編輯彈出視窗 (PropertiesDialog + PropertiesPanel)
 ├── ui_widgets.py      # 音量表及波形圖元件
 ├── logger.py          # 日誌系統
 └── requirements.txt   # 依賴套件

@@ -4,6 +4,16 @@ All notable changes to SoundBoard will be documented in this file.
 
 ---
 
+## v0.3.0 (2026-03-20)
+
+### New Features
+- **屬性面板改為彈出視窗** — 右鍵選取 item 時開啟獨立的 Non-modal 屬性編輯視窗（`PropertiesDialog`），主視窗不再嵌入屬性面板，視窗高度可自由縮小
+- **快捷鍵全域穿透** — 即使焦點在屬性視窗的數值/文字欄位中，快捷鍵仍優先觸發播放
+- **Hold 模式鍵盤支援** — 快捷鍵按住播放、放開停止，與滑鼠行為一致（過濾 auto-repeat）
+- **Pause/Play 切換按鈕** — Play 和 Pause 合併為單一切換按鈕，按下自動切換狀態；Stop All 同時重置按鈕
+
+---
+
 ## v0.2.3 (2026-03-15)
 
 ### Bug Fixes

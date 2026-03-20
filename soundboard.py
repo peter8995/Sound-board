@@ -2,10 +2,10 @@ import sys
 import os
 import logging
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                               QHBoxLayout, QPushButton, QLabel, QSlider, QStackedWidget,
-                               QGroupBox, QComboBox, QFileDialog, QMessageBox, QMenuBar,
-                               QInputDialog, QDialog, QFormLayout, QSpinBox, QDialogButtonBox,
-                               QLineEdit, QDoubleSpinBox, QSplitter)
+                               QHBoxLayout, QPushButton, QLabel, QSlider,
+                               QComboBox, QFileDialog, QMessageBox,
+                               QDialog, QFormLayout, QSpinBox, QDialogButtonBox,
+                               QSplitter)
 from PySide6.QtCore import Qt, QTimer, QTime
 from PySide6.QtGui import QFont, QColor
 
@@ -14,6 +14,7 @@ from audio_engine import AudioEngine
 from ui_widgets import LevelMeter, WaveformPanel
 from ui_cart import CartGrid
 from ui_playlist import PlaylistView
+from ui_properties import PropertiesDialog
 
 logger = logging.getLogger("soundboard")
 
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self.selected_items = []
         self.selected_item = None
         self.is_dirty = False
+        self._hold_keys = {}  # key_name -> item, for keyboard Hold mode tracking
         
         self._init_ui()
         self._init_timers()
@@ -45,17 +47,14 @@ class MainWindow(QMainWindow):
         top_bar = QHBoxLayout()
         
         # Global Controls
-        self.btn_play_all = QPushButton("▶ Play")
-        self.btn_pause_all = QPushButton("⏸ Pause")
+        self.btn_pause_play = QPushButton("⏸ Pause")
+        self._is_paused = False
         self.btn_stop_all = QPushButton("⏹ Stop All (ESC)")
-        
-        # We need an audio engine pause function (will be added to engine)
-        self.btn_play_all.clicked.connect(self._play_selected)
-        self.btn_pause_all.clicked.connect(self._pause_all)
-        self.btn_stop_all.clicked.connect(self.audio_engine.stop_all)
-        
-        top_bar.addWidget(self.btn_play_all)
-        top_bar.addWidget(self.btn_pause_all)
+
+        self.btn_pause_play.clicked.connect(self._toggle_pause)
+        self.btn_stop_all.clicked.connect(self._stop_all_and_reset)
+
+        top_bar.addWidget(self.btn_pause_play)
         top_bar.addWidget(self.btn_stop_all)
         
         # Output Device Selection
@@ -117,14 +116,10 @@ class MainWindow(QMainWindow):
         self.cart_view.file_dropped.connect(self._on_file_dropped)
         left_layout.addWidget(self.cart_view, 1)
 
-        # Properties editor below cart
-        from ui_properties import PropertiesPanel
-        self.prop_group = QGroupBox("Selected Item Properties")
-        prop_inner = QVBoxLayout(self.prop_group)
-        self.prop_panel = PropertiesPanel()
-        self.prop_panel.properties_changed.connect(self._on_properties_changed)
-        prop_inner.addWidget(self.prop_panel)
-        left_layout.addWidget(self.prop_group)
+        # Properties as non-modal dialog (single instance)
+        self._props_dialog = PropertiesDialog(self)
+        self._props_dialog.properties_changed.connect(self._on_properties_changed)
+        self._props_dialog.set_hotkey_callbacks(self._handle_hotkey_press, self._handle_hotkey_release)
 
         # Right Panel - Playlist (full height)
         self.playlist_view = PlaylistView()
@@ -141,7 +136,7 @@ class MainWindow(QMainWindow):
 
         # --- Bottom: Waveform (full width) ---
         self.waveform_panel = WaveformPanel()
-        self.waveform_panel.properties_changed.connect(lambda: self.prop_panel.set_items(self.selected_items))
+        self.waveform_panel.properties_changed.connect(lambda: self._props_dialog.set_items(self.selected_items))
         main_layout.addWidget(self.waveform_panel)
         
         # Init Default Device
@@ -365,11 +360,11 @@ class MainWindow(QMainWindow):
     def _on_item_selected(self, items):
         if not isinstance(items, list):
             items = [items]
-            
+
         self.selected_items = items
         self.selected_item = items[-1] if items else None
-        
-        self.prop_panel.set_items(self.selected_items)
+
+        self._props_dialog.set_items(self.selected_items)
         
         item = self.selected_item
         if item and item.file_path:
@@ -414,19 +409,25 @@ class MainWindow(QMainWindow):
         if self.selected_item == item:
             self._on_item_selected(self.selected_items)
             
-    def _play_selected(self):
-        if self.selected_item:
-            self._on_item_play(self.selected_item)
-
     def _on_hold_released(self, item):
         if item.is_playing and item.play_mode == "Hold":
             self.audio_engine.stop(item.uid, fade_out_time=item.fade_out)
             item.is_playing = False
 
-    def _pause_all(self):
-        # We will add it to engine
+    def _toggle_pause(self):
         if hasattr(self.audio_engine, 'pause_all'):
             self.audio_engine.pause_all()
+        self._is_paused = not self._is_paused
+        if self._is_paused:
+            self.btn_pause_play.setText("▶ Play")
+        else:
+            self.btn_pause_play.setText("⏸ Pause")
+
+    def _stop_all_and_reset(self):
+        self.audio_engine.stop_all()
+        # Reset pause button state
+        self._is_paused = False
+        self.btn_pause_play.setText("⏸ Pause")
 
     def _on_item_play(self, item):
         import uuid
@@ -453,32 +454,70 @@ class MainWindow(QMainWindow):
             else:
                 self.audio_engine.play(item)
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            self.audio_engine.stop_all()
-            return
-            
-        # Ignore hotkeys if user is editing text (like Name or Hotkey field)
-        focus_widget = QApplication.focusWidget()
-        if isinstance(focus_widget, (QLineEdit, QDoubleSpinBox, QSpinBox)):
-            super().keyPressEvent(event)
-            return
-            
-        # Match hotkeys
+    def _resolve_key_name(self, event):
+        """Extract hotkey name string from a key event."""
         key_name = event.text().upper()
         if not key_name and event.key():
             from PySide6.QtGui import QKeySequence
             key_name = QKeySequence(event.key()).toString().upper()
-            
+        return key_name
+
+    def _find_hotkey_item(self, key_name):
+        """Find the project item matching a hotkey string."""
         if not key_name:
-            return
-            
+            return None
         for item in self.project.items:
-            if item.hotkey.upper() == key_name:
-                self._on_item_play(item)
-                return
-                
+            if item.hotkey and item.hotkey.upper() == key_name:
+                return item
+        return None
+
+    def _handle_hotkey_press(self, event):
+        """Handle a hotkey press. Returns True if consumed."""
+        if event.isAutoRepeat():
+            return True  # Swallow auto-repeat for Hold mode stability
+
+        key_name = self._resolve_key_name(event)
+        item = self._find_hotkey_item(key_name)
+        if not item:
+            return False
+
+        if item.play_mode == "Hold":
+            # Hold mode: start playing, track for release
+            if not item.is_playing:
+                self.audio_engine.play(item)
+                self._hold_keys[key_name] = item
+        else:
+            self._on_item_play(item)
+        return True
+
+    def _handle_hotkey_release(self, event):
+        """Handle a hotkey release. Returns True if consumed."""
+        if event.isAutoRepeat():
+            return True
+
+        key_name = self._resolve_key_name(event)
+        if key_name in self._hold_keys:
+            item = self._hold_keys.pop(key_name)
+            if item.is_playing and item.play_mode == "Hold":
+                self.audio_engine.stop(item.uid, fade_out_time=item.fade_out)
+                item.is_playing = False
+            return True
+        return False
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self._stop_all_and_reset()
+            return
+
+        if self._handle_hotkey_press(event):
+            return
+
         super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        if self._handle_hotkey_release(event):
+            return
+        super().keyReleaseEvent(event)
         
 def main():
     from logger import setup_logging, install_excepthook

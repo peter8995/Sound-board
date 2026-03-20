@@ -46,18 +46,31 @@ Single persistent `sounddevice.OutputStream` callback thread mixes all active tr
 
 ```
 CartGrid/PlaylistView  ──item_play_requested──►  MainWindow._on_item_play()  ──►  AudioEngine.play()
-                       ──item_selected────────►  MainWindow._on_item_selected() ──► PropertiesPanel + WaveformPanel
+                       ──item_selected────────►  MainWindow._on_item_selected() ──► PropertiesDialog + WaveformPanel
                        ──hold_release_requested─► MainWindow._on_hold_released() ──► AudioEngine.stop()
 ```
 
 UI updates at 60 Hz via `QTimer`. Clock updates at 1 Hz.
 
-### Mouse Interaction Model
+### Properties Dialog (ui_properties.py)
+
+`PropertiesDialog` is a **non-modal QDialog** (single instance held by `MainWindow._props_dialog`). Right-clicking an item calls `set_items()` which updates content and `show()`s the dialog. The dialog forwards hotkey events to `MainWindow._handle_hotkey_press/release` via callbacks, so hotkeys work even when editing properties.
+
+### Hotkey System (soundboard.py)
+
+- Hotkeys resolved via `_resolve_key_name()` → `_find_hotkey_item()`
+- **Toggle mode:** `_handle_hotkey_press` calls `_on_item_play()` (toggle on/off)
+- **Hold mode:** `_handle_hotkey_press` starts playback + tracks in `_hold_keys` dict; `_handle_hotkey_release` stops on key-up
+- `event.isAutoRepeat()` is filtered out to prevent re-triggering
+- `PropertiesDialog` forwards key events to these handlers, so hotkeys work globally
+
+### Mouse/Keyboard Interaction Model
 
 - **Left click:** Play (Toggle mode) / Press-to-play (Hold mode)
-- **Right click:** Select (opens properties panel)
+- **Right click:** Select (opens properties dialog)
 - **Ctrl+Right click:** Multi-select
-- **ESC:** Global stop all
+- **Keyboard hotkey:** Toggle or Hold mode (Hold: press=play, release=stop)
+- **ESC:** Global stop all + reset pause state
 
 This applies consistently to both CART grid and Playlist.
 
@@ -68,6 +81,16 @@ This applies consistently to both CART grid and Playlist.
 - `item.progress` is written from the audio callback thread — read-only from UI
 - Volume slider range is 0–200% (stored as 0.0–2.0 in `item.volume`)
 - Font: Microsoft JhengHei (微軟正黑體) globally
+
+## Design Decisions
+
+### Properties Panel — 方案 A（已採用）
+
+將 `PropertiesPanel` 從主視窗嵌入元件改為 Non-modal `QDialog`。主視窗持有單一 `_props_dialog` 實例，右鍵 item 時 `show()` + 更新內容。好處：主視窗高度可自由縮小、快捷鍵不被輸入欄位攔截。
+
+### Properties Panel — 方案 B（備用）
+
+將 `ui_properties.py` 整個重寫為獨立 `QDialog` class，完全解耦。更乾淨但改動量大，適合未來大規模重構時採用。
 
 ## Logging
 
